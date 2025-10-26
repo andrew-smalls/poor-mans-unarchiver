@@ -48,6 +48,9 @@ public class UnarchiverService {
         } catch (Exception e) {
             System.out.println("Could not open file: " + filePath + ". Reason: " + e.getMessage());
         }
+        if (file == null || (!file.exists() && !file.mkdirs())) {
+            System.out.println("Could not create directory: " + filePath);
+        }
         return file;
     }
 

@@ -6,7 +6,6 @@ public class Unarchiver {
     private final UnarchiverService unarchiverService = new UnarchiverService();
 
     public Unarchiver(String baseDirPath, String outputDirPath) {
-        unarchiverService.validatePaths();
         this.baseDirPath = baseDirPath;
         this.outputDirPath = outputDirPath;
     }
