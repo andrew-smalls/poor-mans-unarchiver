@@ -2,12 +2,13 @@ public class Unarchiver {
 
     private String baseDirPath;
     private String outputDirPath;
+    private final UnarchiverService unarchiverService;
 
-    private final UnarchiverService unarchiverService = new UnarchiverService();
-
-    public Unarchiver(String baseDirPath, String outputDirPath) {
+    public Unarchiver(String baseDirPath, String outputDirPath, int maxParallelism) {
         this.baseDirPath = baseDirPath;
         this.outputDirPath = outputDirPath;
+        this.unarchiverService = new UnarchiverService(maxParallelism);
+        System.out.println("Unarchiving " + baseDirPath + " to " + outputDirPath + " with parallelism " + maxParallelism);
     }
 
     public void unarchive() {

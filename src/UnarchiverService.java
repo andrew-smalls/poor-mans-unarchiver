@@ -1,10 +1,19 @@
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public class UnarchiverService {
+
+    private final Semaphore concurrencyLimiter;
+
+    public UnarchiverService(int maxParallelism) {
+        this.concurrencyLimiter = new Semaphore(maxParallelism);
+    }
 
     public void unarchive(String baseDirPath, String outputDirPath) {
         File baseDir = getOrCreateFile(baseDirPath);
@@ -13,7 +22,9 @@ public class UnarchiverService {
             throw new IllegalArgumentException("Base directory or output directory does not exist");
         }
         File[] filesInDir = listDirContents(baseDir);
-        parseDir(filesInDir, outputDirPath);
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            parseDir(filesInDir, outputDirPath, executor);
+        }
     }
 
     public File[] listDirContents(File someDir) {
@@ -26,11 +37,22 @@ public class UnarchiverService {
         return listOfFiles;
     }
 
-    public void parseDir(File[] listOfFiles, String outputDirPath) {
+    private void parseDir(File[] listOfFiles, String outputDirPath, ExecutorService executor) {
         for (File file : listOfFiles) {
             if (file.isFile()) {
                 if (file.getName().endsWith(".zip")) {
-                    unzipFile(file, outputDirPath + "\\" + file.getName().replace(".zip", ""));
+                    executor.submit(() -> {
+                        try {
+                            System.out.println("Acquiring concurrency limiter.");
+                            concurrencyLimiter.acquire();
+                            unzipFile(file, outputDirPath + "\\" + file.getName().replace(".zip", ""));
+                        } catch (Exception e) {
+                            System.err.println("Failed to unzip: " + file.getName() + " - " + e.getMessage());
+                        } finally {
+                            concurrencyLimiter.release();
+                            System.out.println("Releasing concurrency limiter.");
+                        }
+                    });
                 } else {
                     System.out.println("Skipping " + file.getName() + " because it is not a zip file.");
                 }
@@ -38,7 +60,6 @@ public class UnarchiverService {
                 System.out.println("Directory: " + file.getName());
             }
         }
-
     }
 
     public File getOrCreateFile(String filePath) {
@@ -55,7 +76,8 @@ public class UnarchiverService {
     }
 
     private static void unzipFile(File zipFile, String destDir) {
-        System.out.println("Unzipping file: " + zipFile.getName() + " to directory: " + destDir);
+        String threadName = Thread.currentThread().toString();
+        System.out.printf("[%s] Starting unzip: %s%n to directory %s.", threadName, zipFile.getName(), destDir);
         File destDirectory = new File(destDir);
         if (!destDirectory.exists()) {
             if (!destDirectory.mkdirs()) {
