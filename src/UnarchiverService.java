@@ -86,34 +86,33 @@ public class UnarchiverService {
 
     private void ungzipFile(File gzipFile, String destDir) {
         String threadName = Thread.currentThread().toString();
-        System.out.printf("[%s] Starting unzip: %s%n to directory %s.", threadName, gzipFile.getName(), destDir);
+        System.out.printf("[%s] Starting unzip: %s → %s%n", threadName, gzipFile.getName(), destDir);
         File destDirectory = new File(destDir);
-        if (!destDirectory.exists()) {
-            if (!destDirectory.mkdirs()) {
-                System.out.println("Failed to create directory: " + destDir);
-                return;
-            }
+        if (!destDirectory.exists() && !destDirectory.mkdirs()) {
+            System.err.println("Failed to create directory: " + destDir);
+            return;
         }
-        try {
-            GZIPInputStream gzis = new GZIPInputStream(new FileInputStream(gzipFile));
-            FileOutputStream out = new FileOutputStream(destDir);
 
-            byte[] buffer = new byte[1024];
-            int totalSize;
-            try {
-                while((totalSize = gzis.read(buffer)) > 0 ) {
-                    out.write(buffer, 0, totalSize);
-                }
-            } catch (Exception e) {
-                System.out.println("Error processing entry: " + gzipFile + " - " + e.getMessage());
+        // Derive output filename (strip ".gz")
+        String outputFileName = gzipFile.getName().replaceAll("\\.gz$", "");
+        File outputFile = new File(destDirectory, outputFileName);
+
+        try (GZIPInputStream gzis = new GZIPInputStream(new FileInputStream(gzipFile));
+             FileOutputStream out = new FileOutputStream(outputFile)) {
+
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = gzis.read(buffer)) != -1) {
+                out.write(buffer, 0, bytesRead);
             }
 
-            out.close();
-            gzis.close();
+            System.out.printf("[%s] Finished unzip: %s → %s%n", threadName, gzipFile.getName(), outputFile.getAbsolutePath());
+
         } catch (Exception e) {
-            System.out.println("Error unzipping file: " + gzipFile.getName() + " - " + e.getMessage());
+            System.err.printf("Error unzipping file: %s - %s%n", gzipFile.getName(), e.getMessage());
         }
     }
+
 
     private static void unzipFile(File zipFile, String destDir) {
         String threadName = Thread.currentThread().toString();
