@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -46,22 +47,24 @@ public class UnarchiverService {
     private void parseDir(File[] listOfFiles, String outputDirPath, ExecutorService executor) {
         for (File file : listOfFiles) {
             if (file.isFile()) {
-                if (file.getName().endsWith(".zip")) {
-                    executor.submit(() -> {
-                        try {
-                            System.out.println("Acquiring concurrency limiter.");
-                            concurrencyLimiter.acquire();
+                executor.submit(() -> {
+                    try {
+                        System.out.println("Acquiring concurrency limiter.");
+                        concurrencyLimiter.acquire();
+                        if (file.getName().endsWith(".zip")) {
                             unzipFile(file, outputDirPath + "\\" + file.getName().replace(".zip", ""));
-                        } catch (Exception e) {
-                            System.err.println("Failed to unzip: " + file.getName() + " - " + e.getMessage());
-                        } finally {
-                            concurrencyLimiter.release();
-                            System.out.println("Releasing concurrency limiter.");
+                        } else if (file.getName().endsWith(".gz")) {
+                            ungzipFile(file, outputDirPath + "\\" + file.getName().replace(".gz", ""));
+                        } else {
+                            System.out.println("Skipping " + file.getName() + " because it is not a zip file.");
                         }
-                    });
-                } else {
-                    System.out.println("Skipping " + file.getName() + " because it is not a zip file.");
-                }
+                    } catch (Exception e) {
+                        System.err.println("Failed to unzip: " + file.getName() + " - " + e.getMessage());
+                    } finally {
+                        concurrencyLimiter.release();
+                        System.out.println("Releasing concurrency limiter.");
+                    }
+                });
             } else if (file.isDirectory()) {
                 System.out.println("Directory: " + file.getName());
             }
@@ -79,6 +82,37 @@ public class UnarchiverService {
             System.out.println("Could not create directory: " + filePath);
         }
         return file;
+    }
+
+    private void ungzipFile(File gzipFile, String destDir) {
+        String threadName = Thread.currentThread().toString();
+        System.out.printf("[%s] Starting unzip: %s%n to directory %s.", threadName, gzipFile.getName(), destDir);
+        File destDirectory = new File(destDir);
+        if (!destDirectory.exists()) {
+            if (!destDirectory.mkdirs()) {
+                System.out.println("Failed to create directory: " + destDir);
+                return;
+            }
+        }
+        try {
+            GZIPInputStream gzis = new GZIPInputStream(new FileInputStream(gzipFile));
+            FileOutputStream out = new FileOutputStream(destDir);
+
+            byte[] buffer = new byte[1024];
+            int totalSize;
+            try {
+                while((totalSize = gzis.read(buffer)) > 0 ) {
+                    out.write(buffer, 0, totalSize);
+                }
+            } catch (Exception e) {
+                System.out.println("Error processing entry: " + gzipFile + " - " + e.getMessage());
+            }
+
+            out.close();
+            gzis.close();
+        } catch (Exception e) {
+            System.out.println("Error unzipping file: " + gzipFile.getName() + " - " + e.getMessage());
+        }
     }
 
     private static void unzipFile(File zipFile, String destDir) {
