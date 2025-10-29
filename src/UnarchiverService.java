@@ -1,6 +1,8 @@
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -22,9 +24,13 @@ public class UnarchiverService {
             throw new IllegalArgumentException("Base directory or output directory does not exist");
         }
         File[] filesInDir = listDirContents(baseDir);
+        Instant start = Instant.now();
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             parseDir(filesInDir, outputDirPath, executor);
         }
+        Instant finish = Instant.now();
+        long timeElapsed = Duration.between(start, finish).toSeconds();
+        System.out.println("Total time elapsed: " + timeElapsed + " seconds");
     }
 
     public File[] listDirContents(File someDir) {
